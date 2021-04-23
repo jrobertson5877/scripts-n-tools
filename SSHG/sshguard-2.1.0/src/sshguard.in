@@ -1,0 +1,99 @@
+#!/bin/sh
+# sshguard -- protect hosts from brute-force attacks
+
+# Unregister recursive SIGTERM, and make sure to kill
+# entire process group (subshell) on exit/interrupts.
+trap "trap - SIGTERM && kill 0" SIGINT SIGTERM EXIT
+
+libexec="@libexecdir@"
+version="@sshguardversion@"
+
+err() {
+    echo "sshguard: $1" >&2
+}
+
+setflag() {
+    if [ ! -z "$2" ]; then
+        flags="$flags -$1 $2"
+    fi
+}
+
+usage() {
+    cat << EOF
+Usage: sshguard [-v] [-h]
+[-a BLACKLIST-THRESHOLD] [-b BLACKLIST-FILE]
+[-i PID-FILE] [-p BLOCK_TIME]
+[-s DETECTION_TIME] [-w IP-ADDRESS | WHITELIST-FILE]
+EOF
+}
+
+# Source configuration file
+config="@sysconfdir@/sshguard.conf"
+if [ ! -r $config ]; then
+    err "Could not read '$config'"
+    err "Please configure SSHGuard."
+    exit 78
+fi
+
+. $config
+
+# Runtime arguments override configuration options
+while getopts "b:l:p:s:a:w:i:hv" opt; do
+    case $opt in
+        a) THRESHOLD=$OPTARG;;
+        b) BLACKLIST_FILE=$OPTARG;;
+        i) PID_FILE=$OPTARG;;
+        l) FILES="$FILES $OPTARG";;
+        p) BLOCK_TIME=$OPTARG;;
+        s) DETECTION_TIME=$OPTARG;;
+        w) WHITELIST_ARG="$WHITELIST_ARG $OPTARG";;
+        h) usage; exit;;
+        v) echo "SSHGuard $version"; exit;;
+    esac
+done
+
+# Check backend
+if [ -z "$BACKEND" ]; then
+    err "BACKEND must be set in '$config'"
+    exit 78
+elif [ ! -x "$BACKEND" ]; then
+    err "'$BACKEND' is not executable"
+    exit 78
+fi
+
+# Read config in to flags
+setflag 'a' $THRESHOLD
+setflag 'b' $BLACKLIST_FILE
+setflag 'i' $PID_FILE
+setflag 'p' $BLOCK_TIME
+setflag 's' $DETECTION_TIME
+setflag 'N' $IPV6_SUBNET
+setflag 'n' $IPV4_SUBNET
+if [ ! -z "$WHITELIST_ARG" ]; then
+    for arg in $WHITELIST_ARG; do
+      flags="$flags -w $arg"
+    done
+elif [ ! -z "$WHITELIST_FILE" ]; then
+    flags="$flags -w $WHITELIST_FILE"
+fi
+
+# Log source selection order:
+#     runtime args, logreader and files, logreader, files, or stdin
+shift $((OPTIND-1))
+if [ ! -z "$@" ]; then
+    tailcmd="$libexec/sshg-logtail $@"
+elif [ \( ! -z "$LOGREADER" \) -a \( ! -z "$FILES" \) ]; then
+    LOGREADER="$LOGREADER | grep --line-buffered '^'"
+    FILESREAD="$libexec/sshg-logtail $FILES | grep --line-buffered '^'"
+    tailcmd="( $LOGREADER & $FILESREAD )"
+elif [ ! -z "$LOGREADER" ]; then
+    tailcmd="$LOGREADER"
+elif [ ! -z "$FILES" ]; then
+    tailcmd="$libexec/sshg-logtail $FILES"
+elif [ -z "$tailcmd" ]; then
+    err "Reading from stdin. You probably shouldn't be doing this."
+    tailcmd="cat"
+fi
+
+eval $tailcmd | $libexec/sshg-parser | \
+    $libexec/sshg-blocker $flags | ($BACKEND; kill -PIPE $$)

@@ -1,0 +1,156 @@
+.\" Man page generated from reStructuredText.
+.
+.TH SSHGUARD 8 "January 9, 2017" "2.1" "SSHGuard Manual"
+.SH NAME
+sshguard \- block brute-force attacks by aggregating system logs
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.\" Copyright (c) 2007,2008,2009,2010 Mij <mij@sshguard.net>
+.
+.\" Permission to use, copy, modify, and distribute this software for any
+.
+.\" purpose with or without fee is hereby granted, provided that the above
+.
+.\" copyright notice and this permission notice appear in all copies.
+.
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.
+.SH SYNOPSIS
+.sp
+\fBsshguard\fP [\fB\-hv\fP]
+[\fB\-a\fP \fIthreshold\fP]
+[\fB\-b\fP \fIthreshold\fP:\fIblacklist_file\fP]
+[\fB\-i\fP \fIpidfile\fP]
+[\fB\-p\fP \fIblocktime\fP]
+[\fB\-s\fP \fIdetection_time\fP]
+[\fB\-w\fP \fIaddress\fP | \fIwhitelist_file\fP]
+[\fIfile\fP ...]
+.SH DESCRIPTION
+.sp
+\fBsshguard\fP protects hosts from brute\-force attacks against SSH and other
+services. It aggregates system logs and blocks repeat offenders using one of
+several firewall backends.
+.sp
+\fBsshguard\fP can monitor log files or read log messages from standard input.
+Log messages are parsed line\-by\-line for recognized patterns. An attack is
+detected when several patterns are matched in a set time interval. Attackers
+are blocked temporarily but can also be semi\-permanently banned using the
+blacklist option.
+.SH OPTIONS
+.INDENT 0.0
+.TP
+.B \fB\-a\fP \fIthreshold\fP (default 30)
+Block attackers when their cumulative attack score exceeds \fIthreshold\fP\&.
+Most attacks have a score of 10.
+.TP
+.B \fB\-b\fP \fIthreshold\fP:\fIblacklist_file\fP
+Blacklist an attacker when its score exceeds \fIthreshold\fP\&. Blacklisted
+addresses are loaded from and added to \fIblacklist\-file\fP\&.
+.TP
+.B \fB\-i\fP \fIpidfile\fP
+Write the PID of \fBsshguard\fP to \fIpidfile\fP\&.
+.TP
+.B \fB\-p\fP \fIblocktime\fP (default 120)
+Block attackers for initially \fIblocktime\fP seconds after exceeding
+\fIthreshold\fP\&. Subsequent blocks increase by a factor of 1.5.
+.sp
+\fBsshguard\fP unblocks attacks at random intervals, so actual block times
+will be longer.
+.TP
+.B \fB\-s\fP \fIdetection_time\fP (default 1800)
+Remember potential attackers for up to \fIdetection_time\fP seconds before
+resetting their score.
+.TP
+.B [\fB\-w\fP \fIaddress\fP | \fIwhitelist_file\fP]
+Whitelist a single address, hostname, or address block given as
+\fIaddress\fP\&. This option can be given multiple times. Alternatively,
+provide an absolute path to a \fIwhitelist_file\fP containing addresses to
+whitelist. See \fI\%WHITELISTING\fP\&.
+.TP
+.B \fB\-h\fP
+Print usage information and exit.
+.TP
+.B \fB\-v\fP
+Print version information and exit.
+.UNINDENT
+.SH ENVIRONMENT
+.INDENT 0.0
+.TP
+.B SSHGUARD_DEBUG
+Set to enable verbose output from sshg\-blocker.
+.UNINDENT
+.SH FILES
+.INDENT 0.0
+.TP
+.B %PREFIX%/etc/sshguard.conf
+See sample configuration file.
+.UNINDENT
+.SH WHITELISTING
+.sp
+Whitelisted addresses are never blocked. Addresses can be specified on the
+command line or be stored in a file.
+.sp
+On the command line, give the \fB\-w\fP option one or more times with an IP
+address, CIDR address block, or hostname as an argument. Hostnames are
+resolved once at startup. If a hostname resolves to multiple addresses, all
+of them are whitelisted. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+sshguard \-w 192.168.1.10 \-w 192.168.0.0/24 \-w friend.example.com
+    \-w 2001:0db8:85a3:0000:0000:8a2e:0370:7334
+    \-w 2002:836b:4179::836b:0000/126
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If the argument to \fB\-w\fP begins with a forward slash (\(aq/\(aq) or dot (\(aq.\(aq),
+the argument is treated as the path to a whitelist file.
+.sp
+The whitelist file contains comments (lines beginning with \(aq#\(aq), addresses,
+address blocks, or hostnames, one per line.
+.SH SEE ALSO
+.sp
+sshguard\-setup(7)
+.\" Generated by docutils manpage writer.
+.

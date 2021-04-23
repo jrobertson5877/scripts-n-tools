@@ -1,0 +1,32 @@
+die() {
+    echo "`basename $0`: $2" >&2
+    exit $1
+}
+
+fw_init || die 69 "Could not initialize firewall"
+
+cleanup() {
+    trap "" EXIT
+    if [ "YES" = "$flushonexit" ]; then
+        fw_flush
+    fi
+    fw_fin
+    exit
+}
+
+trap cleanup EXIT INT
+
+while read cmd address addrtype cidr; do
+    case $cmd in
+        block)
+            fw_block $address $addrtype $cidr;;
+        release)
+            fw_release $address $addrtype $cidr;;
+        flush)
+            fw_flush;;
+        flushonexit)
+            flushonexit=YES;;
+        *)
+            die 65 "Invalid command";;
+    esac
+done
